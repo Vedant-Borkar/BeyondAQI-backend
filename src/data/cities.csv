@@ -1,0 +1,21 @@
+city,state,country,latitude,longitude,is_country_metro_city,is_state_metro_city
+Mumbai,Maharashtra,India,19.0760,72.8777,true,true
+Delhi,Delhi,India,28.6139,77.2090,true,true
+Bengaluru,Karnataka,India,12.9716,77.5946,true,true
+Chennai,Tamil Nadu,India,13.0827,80.2707,true,true
+Kolkata,West Bengal,India,22.5726,88.3639,true,true
+Hyderabad,Telangana,India,17.3850,78.4867,true,true
+Pune,Maharashtra,India,18.5204,73.8567,false,true
+Nagpur,Maharashtra,India,21.1458,79.0882,false,true
+Ahmedabad,Gujarat,India,23.0225,72.5714,false,true
+Surat,Gujarat,India,21.1702,72.8311,false,true
+Jaipur,Rajasthan,India,26.9124,75.7873,false,true
+Lucknow,Uttar Pradesh,India,26.8467,80.9462,false,true
+Indore,Madhya Pradesh,India,22.7196,75.8577,false,true
+Bhopal,Madhya Pradesh,India,23.2599,77.4126,false,true
+Kochi,Kerala,India,9.9312,76.2673,false,true
+Thiruvananthapuram,Kerala,India,8.5241,76.9366,false,true
+Patna,Bihar,India,25.5941,85.1376,false,true
+Chandigarh,Chandigarh,India,30.7333,76.7794,false,true
+Guwahati,Assam,India,26.1445,91.7362,false,true
+Visakhapatnam,Andhra Pradesh,India,17.6868,83.2185,false,true
