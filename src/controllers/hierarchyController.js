@@ -27,7 +27,7 @@ const getCountryData = async (req, res) => {
   try {
     const { country } = req.params;
     const { timestamp } = req.query;
-
+		console.log(country, timestamp);
     const data = await findWithTimestamp(Country, { country }, timestamp);
     if (!data) throw new Error("No data found");
 
@@ -46,7 +46,7 @@ const getStateData = async (req, res) => {
   try {
     const { country, state } = req.params;
     const { timestamp } = req.query;
-
+		console.log(country, state, timestamp);
     const data = await findWithTimestamp(State, { country, state }, timestamp);
     if (!data) throw new Error("No data found");
 
@@ -79,22 +79,26 @@ const getCityData = async (req, res) => {
   }
 };
 
-// Country Metro Cities
+//Country Metro Cities
 const getCountryMetroCities = async (req, res) => {
   try {
     const { country } = req.params;
-
-    const latestRecord = await City.findOne({ country }).sort({ datetime: -1 });
+		console.log(country);
+    // Use case-insensitive regex for latest record (FIXED)
+    const latestRecord = await City.findOne({
+      country: new RegExp(`^${country}$`, "i")
+    }).sort({ datetime: -1 });
+    
     if (!latestRecord) throw new Error("No data found");
 
     const latestTimestamp = latestRecord.datetime;
-
+		console.log(latestTimestamp);
     const metros = await City.find({
       country: new RegExp(`^${country}$`, "i"),
       is_country_metro_city: true,
       datetime: latestTimestamp,
     });
-
+		console.log(metros);
     const responseData = {
       timestamp: latestTimestamp,
       cities: metros.map((c) => ({
@@ -114,12 +118,17 @@ const getCountryMetroCities = async (req, res) => {
   }
 };
 
-// State Metro Cities
+// State Metro Cities  
 const getStateMetroCities = async (req, res) => {
   try {
     const { country, state } = req.params;
 
-    const latestRecord = await City.findOne({ country, state }).sort({ datetime: -1 });
+    // Use case-insensitive regex for latest record (FIXED)
+    const latestRecord = await City.findOne({
+      country: new RegExp(`^${country}$`, "i"),
+      state: new RegExp(`^${state}$`, "i")
+    }).sort({ datetime: -1 });
+    
     if (!latestRecord) throw new Error("No data found");
 
     const latestTimestamp = latestRecord.datetime;

@@ -1,0 +1,88 @@
+const City = require("../models/CityAQI");
+const { CustomResponse, APIConstants } = require("../utils/apiconst");
+
+const getAqiStatusFromScale = (aqiScale) => {
+  switch (aqiScale) {
+    case 1: return "Good";
+    case 2: return "Moderate"; 
+    case 3: return "Unhealthy for Sensitive Groups";
+    case 4: return "Unhealthy";
+    case 5: return "Very Unhealthy";
+    case 6: return "Hazardous";
+    default: return "Unknown";
+  }
+};
+
+const calculatePuffScore = (aqiValue, aqiScale) => {
+  // Puff score calculation based on AQI ranges
+  if (aqiScale === 1) return Math.round(aqiValue * 0.02); // Good: 0-50
+  if (aqiScale === 2) return Math.round(aqiValue * 0.06); // Moderate: 51-100
+  if (aqiScale === 3) return Math.round(aqiValue * 0.08); // USG: 101-150
+  if (aqiScale === 4) return Math.round(aqiValue * 0.12); // Unhealthy: 151-200
+  if (aqiScale === 5) return Math.round(aqiValue * 0.15); // Very Unhealthy: 201-300
+  if (aqiScale === 6) return Math.round(aqiValue * 0.20); // Hazardous: 301+
+  return 0;
+};
+
+const getMostPollutedCities = async (req, res) => {
+  try {
+    const { country = "India", limit = 50 } = req.query;
+
+    // Get latest timestamp
+    const latestRecord = await City.findOne({ country }).sort({ datetime: -1 });
+    if (!latestRecord) throw new Error("No data found");
+
+    const latestTimestamp = latestRecord.datetime;
+
+    // Get all cities with latest timestamp, sorted by AQI descending
+    const cities = await City.find({
+      country: new RegExp(`^${country}$`, "i"),
+      datetime: latestTimestamp,
+    })
+    .sort({ aqi: -1 })
+    .limit(parseInt(limit));
+
+    if (!cities || cities.length === 0) {
+      throw new Error("No cities found");
+    }
+
+    // Format response with ranks
+    const responseData = {
+      timestamp: latestTimestamp,
+      cities: cities.map((city, index) => ({
+        rank: index + 1,
+        city: city.city,
+        state: city.state,
+        country: city.country,
+        aqi: city.aqi,
+        aqi_scale: city.aqi_scale,
+        aqi_status: getAqiStatusFromScale(city.aqi_scale),
+        puff_score: calculatePuffScore(city.aqi, city.aqi_scale)
+      }))
+    };
+
+    return res.json(
+      CustomResponse(
+        "Successfully fetched most polluted cities",
+        APIConstants.Status.Success,
+        APIConstants.StatusCode.Ok,
+        responseData
+      )
+    );
+
+  } catch (err) {
+    return res.json(
+      CustomResponse(
+        "Error while fetching leaderboard",
+        APIConstants.Status.Failure,
+        APIConstants.StatusCode.BadRequest,
+        {},
+        err.message
+      )
+    );
+  }
+};
+
+module.exports = {
+  getMostPollutedCities,
+};
