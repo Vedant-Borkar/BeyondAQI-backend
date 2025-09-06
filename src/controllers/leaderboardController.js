@@ -34,38 +34,49 @@ const getMostPollutedCities = async (req, res) => {
 		// Convert to zero-based page for DB
 		let skip = limit * (page - 1);
 
-		// Get latest timestamp
-		const latestRecord = await City.findOne({ country: new RegExp(`^${country}$`, "i") }).sort({ datetime: -1 });
-		if (!latestRecord) throw new Error("No data found");
+		// Get latest timestamp for each unique city using aggregation
+		const latestCitiesData = await City.aggregate([
+			{
+				$match: {
+					country: new RegExp(`^${country}$`, "i")
+				}
+			},
+			{
+				$sort: { datetime: -1 }
+			},
+			{
+				$group: {
+					_id: { city: "$city", state: "$state" },
+					latestData: { $first: "$$ROOT" }
+				}
+			},
+			{
+				$replaceRoot: { newRoot: "$latestData" }
+			},
+			{
+				$sort: { aqi: -1 }
+			}
+		]);
 
-		const latestTimestamp = latestRecord.datetime;
+		if (!latestCitiesData || latestCitiesData.length === 0) throw new Error("No data found");
 
-		const total = await City.countDocuments({
-			country: new RegExp(`^${country}$`, "i"),
-			datetime: latestTimestamp,
-		});
-
-		// Get all cities with latest timestamp, sorted by AQI descending
-		const cities = await City.find({
-			country: new RegExp(`^${country}$`, "i"),
-			datetime: latestTimestamp,
-		})
-			.sort({ aqi: -1 })
-			.limit(limit)
-			.skip(skip);
+		const total = latestCitiesData.length;
+		
+		// Apply pagination
+		const cities = latestCitiesData.slice(skip, skip + limit);
 
 		// Format response with ranks
 		const responseData = {
-			timestamp: latestTimestamp,
 			cities: cities.map((city, index) => ({
-				rank: index + 1,
+				rank: skip + index + 1,
 				city: city.city,
 				state: city.state,
 				country: city.country,
 				aqi: city.aqi,
 				aqi_scale: city.aqi_scale,
 				aqi_status: getAqiStatusFromScale(city.aqi_scale),
-				puff_score: calculatePuffScore(city.aqi, city.aqi_scale)
+				puff_score: calculatePuffScore(city.aqi, city.aqi_scale),
+				timestamp: city.datetime
 			}))
 		};
 
@@ -122,35 +133,40 @@ const getMostPollutedCitiesByState = async (req, res) => {
 		// Convert to zero-based page for DB
 		let skip = limit * (page - 1);
 
-		// Get latest timestamp for the specific state
-		const latestRecord = await City.findOne({ 
-			country: new RegExp(`^${country}$`, "i"),
-			state: new RegExp(`^${state}$`, "i")
-		}).sort({ datetime: -1 });
+		// Get latest timestamp for each unique city within state using aggregation
+		const latestCitiesData = await City.aggregate([
+			{
+				$match: {
+					country: new RegExp(`^${country}$`, "i"),
+					state: new RegExp(`^${state}$`, "i")
+				}
+			},
+			{
+				$sort: { datetime: -1 }
+			},
+			{
+				$group: {
+					_id: { city: "$city" },
+					latestData: { $first: "$$ROOT" }
+				}
+			},
+			{
+				$replaceRoot: { newRoot: "$latestData" }
+			},
+			{
+				$sort: { aqi: -1 }
+			}
+		]);
+
+		if (!latestCitiesData || latestCitiesData.length === 0) throw new Error("No data found for this state");
+
+		const total = latestCitiesData.length;
 		
-		if (!latestRecord) throw new Error("No data found for this state");
-
-		const latestTimestamp = latestRecord.datetime;
-
-		const total = await City.countDocuments({
-			country: new RegExp(`^${country}$`, "i"),
-			state: new RegExp(`^${state}$`, "i"),
-			datetime: latestTimestamp,
-		});
-
-		// Get all cities within the state with latest timestamp, sorted by AQI descending
-		const cities = await City.find({
-			country: new RegExp(`^${country}$`, "i"),
-			state: new RegExp(`^${state}$`, "i"),
-			datetime: latestTimestamp,
-		})
-			.sort({ aqi: -1 })
-			.limit(limit)
-			.skip(skip);
+		// Apply pagination
+		const cities = latestCitiesData.slice(skip, skip + limit);
 
 		// Format response with ranks
 		const responseData = {
-			timestamp: latestTimestamp,
 			state: state,
 			country: country,
 			cities: cities.map((city, index) => ({
@@ -161,7 +177,8 @@ const getMostPollutedCitiesByState = async (req, res) => {
 				aqi: city.aqi,
 				aqi_scale: city.aqi_scale,
 				aqi_status: getAqiStatusFromScale(city.aqi_scale),
-				puff_score: calculatePuffScore(city.aqi, city.aqi_scale)
+				puff_score: calculatePuffScore(city.aqi, city.aqi_scale),
+				timestamp: city.datetime
 			}))
 		};
 
