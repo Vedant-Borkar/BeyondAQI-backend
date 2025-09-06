@@ -4,6 +4,8 @@ const connectDB = require("./config/db");
 const hierarchyRoutes = require("./routes/hierarchyRoutes");
 const leaderboardRoutes = require("./routes/leaderboardRoutes");
 const dropdownRoutes = require("./routes/dropdownRoutes");
+const historicalRoutes = require("./routes/historicalRoutes");
+const searchRoutes = require("./routes/searchRoutes");
 const cors = require("cors");
 
 const app = express();
@@ -16,6 +18,8 @@ connectDB();
 // Routes
 app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/dropdown", dropdownRoutes);
+app.use("/api/historical", historicalRoutes);
+app.use("/api/search", searchRoutes);
 app.use("/api", hierarchyRoutes);
 
 const PORT = process.env.PORT || 5000;
