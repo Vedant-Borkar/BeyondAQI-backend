@@ -9,12 +9,31 @@ const searchRoutes = require("./routes/searchRoutes");
 const realtimeRoutes = require("./routes/realtimeRoutes");
 const cors = require("cors");
 
+// Import rate limiter
+const rateLimiter = require("./middleware/rateLimiter");
+
 const app = express();
-app.use(express.json());
-app.use(cors());
+
+// Trust proxy - IMPORTANT for rate limiting behind reverse proxy/load balancer
+app.set('trust proxy', 1);
+
+// Apply rate limiting to all requests
+app.use(rateLimiter);
+
+// Other middleware
+app.use(express.json({ limit: '10mb' })); // Add size limit for security
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000', // Restrict CORS to your frontend
+  credentials: true
+}));
 
 // Connect DB
 connectDB();
+
+// Health check endpoint (excluded from rate limiting)
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
 
 // Routes
 app.use("/api/leaderboard", leaderboardRoutes);
@@ -24,5 +43,34 @@ app.use("/api/search", searchRoutes);
 app.use("/api/realtime", realtimeRoutes);
 app.use("/api", hierarchyRoutes);
 
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({
+    status: 'error',
+    statusCode: 500,
+    message: 'Internal server error',
+    data: {},
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+  });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    status: 'error',
+    statusCode: 404,
+    message: 'Route not found',
+    data: {},
+    error: `Cannot ${req.method} ${req.originalUrl}`
+  });
+});
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🛡️ Rate limiting: 10,000 requests per hour per IP`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+});
+
+module.exports = app;
