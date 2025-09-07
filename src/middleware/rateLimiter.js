@@ -1,41 +1,75 @@
 const rateLimit = require('express-rate-limit');
 
-// Create rate limiter: 10,000 requests per hour
+// Production-grade rate limiter for BeyondAQI API
 const createRateLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour in milliseconds
-  max: 10000, // Limit each IP to 10,000 requests per windowMs
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10000, // 10,000 requests per hour
+  
+  // Enhanced error response matching BeyondAQI API standards
   message: {
-    error: 'Too many requests from this IP',
+    status: 'error',
+    statusCode: 429,
     message: 'Rate limit exceeded. Maximum 10,000 requests per hour allowed.',
-    retryAfter: '1 hour',
-    code: 'RATE_LIMIT_EXCEEDED'
+    data: {},
+    error: 'Too many requests from this IP address',
+    retryAfter: 3600,
+    resetTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    limits: {
+      max: 10000,
+      windowMs: 3600000,
+      remaining: 0
+    }
   },
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   
-  // Custom key generator (optional) - uses IP by default
-  keyGenerator: (req) => {
-    // You can customize this if needed
-    return req.ip || req.connection.remoteAddress;
-  },
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
   
-  // Custom handler for when limit is exceeded
-  handler: (req, res) => {
+  // Custom handler for consistent API formatting
+  handler: (req, res, next, options) => {
+    const resetTime = new Date(Date.now() + options.windowMs);
+    const remaining = Math.max(0, options.max - (req.rateLimit?.current || 0));
+    
+    // Log rate limit breach (replaces deprecated onLimitReached)
+    console.warn(`🚨 Rate limit exceeded:`, {
+      ip: req.ip,
+      endpoint: req.originalUrl,
+      method: req.method,
+      timestamp: new Date().toISOString(),
+      userAgent: req.get('User-Agent')
+    });
+    
     res.status(429).json({
       status: 'error',
       statusCode: 429,
       message: 'Rate limit exceeded. Maximum 10,000 requests per hour allowed.',
       data: {},
-      error: 'Too many requests from this IP',
-      retryAfter: '1 hour'
+      error: 'Too many requests from this IP address',
+      retryAfter: Math.ceil(options.windowMs / 1000),
+      resetTime: resetTime.toISOString(),
+      limits: {
+        max: options.max,
+        windowMs: options.windowMs,
+        remaining: remaining,
+        current: req.rateLimit?.current || 0
+      },
+      requestInfo: {
+        ip: req.ip,
+        endpoint: req.originalUrl,
+        method: req.method,
+        timestamp: new Date().toISOString()
+      }
     });
   },
   
-  // Skip certain requests (optional)
-  skip: (req) => {
-    // Skip rate limiting for health checks or specific endpoints if needed
-    return req.path === '/health' || req.path === '/status';
-  }
+  // Skip rate limiting for health checks and monitoring
+  skip: (req, res) => {
+    const skipPaths = ['/health', '/status', '/ping', '/metrics'];
+    return skipPaths.includes(req.path) || req.path.startsWith('/health');
+  },
+  
+  requestWasSuccessful: (req, res) => res.statusCode < 400,
+  skipFailedRequests: false,
+  skipSuccessfulRequests: false
 });
 
 module.exports = createRateLimiter;

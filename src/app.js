@@ -8,29 +8,27 @@ const historicalRoutes = require("./routes/historicalRoutes");
 const searchRoutes = require("./routes/searchRoutes");
 const realtimeRoutes = require("./routes/realtimeRoutes");
 const cors = require("cors");
-
-// Import rate limiter
 const rateLimiter = require("./middleware/rateLimiter");
 
 const app = express();
 
-// Trust proxy - IMPORTANT for rate limiting behind reverse proxy/load balancer
+// Trust proxy for rate limiting
 app.set('trust proxy', 1);
 
 // Apply rate limiting to all requests
 app.use(rateLimiter);
 
 // Other middleware
-app.use(express.json({ limit: '10mb' })); // Add size limit for security
+app.use(express.json({ limit: '10mb' }));
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000', // Restrict CORS to your frontend
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true
 }));
 
 // Connect DB
 connectDB();
 
-// Health check endpoint (excluded from rate limiting)
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
@@ -55,8 +53,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
+// 404 handler - FIXED: Use proper route pattern
+app.use((req, res) => {
   res.status(404).json({
     status: 'error',
     statusCode: 404,
