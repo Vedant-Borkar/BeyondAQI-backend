@@ -35,41 +35,81 @@ app.use(express.urlencoded({
   parameterLimit: 1000
 }));
 
-// 4. Enhanced CORS configuration with strict domain restriction
-const allowedOrigins = [
-  'https://beyond-main-d.vercel.app',
-  'http://localhost:3000',
-  'http://localhost:3001',
-];
-
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
+// 4. Enhanced CORS configuration with environment-based restrictions
+const corsConfig = () => {
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
+  if (isDevelopment) {
+    // Development: Allow all localhost variants for testing
+    return {
+      origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+        
+        const localhostRegex = /^http:\/\/localhost:\d+$/;
+        const localhostIpRegex = /^http:\/\/127\.0\.0\.1:\d+$/;
+        
+        if (localhostRegex.test(origin) || localhostIpRegex.test(origin)) {
+          callback(null, true);
+        } else {
+          console.warn(`🚫 DEV CORS blocked request from origin: ${origin}`);
+          callback(new Error('Not allowed by CORS policy'));
+        }
+      },
+      credentials: true,
+      optionsSuccessStatus: 200,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: [
+        'Origin',
+        'X-Requested-With', 
+        'Content-Type', 
+        'Accept',
+        'Authorization',
+        'Cache-Control'
+      ],
+      exposedHeaders: [
+        'X-RateLimit-Limit',
+        'X-RateLimit-Remaining',
+        'X-RateLimit-Reset'
+      ]
+    };
+  } else {
+    // Production: Strict domain whitelist
+    const allowedOrigins = [
+      'https://beyond-main-d.vercel.app'
+    ];
     
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.warn(`🚫 CORS blocked request from origin: ${origin}`);
-      callback(new Error('Not allowed by CORS policy'));
-    }
-  },
-  credentials: true,
-  optionsSuccessStatus: 200,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Origin',
-    'X-Requested-With', 
-    'Content-Type', 
-    'Accept',
-    'Authorization',
-    'Cache-Control'
-  ],
-  exposedHeaders: [
-    'X-RateLimit-Limit',
-    'X-RateLimit-Remaining',
-    'X-RateLimit-Reset'
-  ]
-}));
+    return {
+      origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) !== -1) {
+          callback(null, true);
+        } else {
+          console.warn(`🚫 PROD CORS blocked request from origin: ${origin}`);
+          callback(new Error('Not allowed by CORS policy'));
+        }
+      },
+      credentials: true,
+      optionsSuccessStatus: 200,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: [
+        'Origin',
+        'X-Requested-With', 
+        'Content-Type', 
+        'Accept',
+        'Authorization',
+        'Cache-Control'
+      ],
+      exposedHeaders: [
+        'X-RateLimit-Limit',
+        'X-RateLimit-Remaining',
+        'X-RateLimit-Reset'
+      ]
+    };
+  }
+};
+
+app.use(cors(corsConfig()));
 
 // 5. Additional security headers
 app.use((req, res, next) => {
@@ -209,13 +249,15 @@ app.use((req, res) => {
 // ==================================================
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
   console.log('='.repeat(50));
   console.log('🚀 BeyondAQI Backend Server Started');
   console.log('='.repeat(50));
   console.log(`📍 Server running on port ${PORT}`);
   console.log(`🛡️ Rate limiting: 10,000 requests per hour per IP`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔒 CORS restricted to: ${allowedOrigins.join(', ')}`);
+  console.log(`🔒 CORS mode: ${isDevelopment ? 'Development (localhost allowed)' : 'Production (strict whitelist)'}`);
   console.log(`📊 Request size limit: 10MB`);
   console.log(`🔑 Proxy trust: Enabled`);
   console.log(`⏰ Started at: ${new Date().toISOString()}`);
