@@ -14,27 +14,24 @@ const getAqiStatusFromScale = (aqiScale) => {
 };
 
 const calculatePuffScore = (aqiValue, aqiScale) => {
-	// Puff score calculation based on AQI ranges
-	if (aqiScale === 1) return Math.round(aqiValue * 0.02); // Good: 0-50
-	if (aqiScale === 2) return Math.round(aqiValue * 0.06); // Moderate: 51-100
-	if (aqiScale === 3) return Math.round(aqiValue * 0.08); // USG: 101-150
-	if (aqiScale === 4) return Math.round(aqiValue * 0.12); // Unhealthy: 151-200
-	if (aqiScale === 5) return Math.round(aqiValue * 0.15); // Very Unhealthy: 201-300
-	if (aqiScale === 6) return Math.round(aqiValue * 0.20); // Hazardous: 301+
+	if (aqiScale === 1) return Math.round(aqiValue * 0.02);
+	if (aqiScale === 2) return Math.round(aqiValue * 0.06);
+	if (aqiScale === 3) return Math.round(aqiValue * 0.08);
+	if (aqiScale === 4) return Math.round(aqiValue * 0.12);
+	if (aqiScale === 5) return Math.round(aqiValue * 0.15);
+	if (aqiScale === 6) return Math.round(aqiValue * 0.20);
 	return 0;
 };
 
-// Get real-time states data for a country
 const getRealtimeStatesByCountry = async (req, res) => {
 	try {
 		const { country } = req.params;
-		const { page = 1, limit = 20 } = req.query;
+		const { page = 1, limit = 20, search = "" } = req.query;
 
 		const pageNum = Number(page);
 		const limitNum = Number(limit);
 		const skip = (pageNum - 1) * limitNum;
 
-		// Get latest timestamp for each unique state using aggregation
 		const latestStatesData = await City.aggregate([
 			{
 				$match: {
@@ -62,15 +59,22 @@ const getRealtimeStatesByCountry = async (req, res) => {
 			throw new Error(`No states found for country: ${country}`);
 		}
 
-		const total = latestStatesData.length;
-		
-		// Apply pagination
-		const states = latestStatesData.slice(skip, skip + limitNum);
+		let filteredStates = latestStatesData;
 
-		// Format response with ranks
+		if (search && search.trim()) {
+			const searchTerm = search.trim().toLowerCase();
+			filteredStates = latestStatesData.filter(state => 
+				state.state.toLowerCase().includes(searchTerm)
+			);
+		}
+
+		const total = filteredStates.length;
+		const paginatedStates = filteredStates.slice(skip, skip + limitNum);
+
 		const responseData = {
 			country: country,
-			states: states.map((state, index) => ({
+			...(search ? { search: search } : {}),
+			states: paginatedStates.map((state, index) => ({
 				rank: skip + index + 1,
 				state: state.state,
 				country: state.country,
@@ -118,17 +122,15 @@ const getRealtimeStatesByCountry = async (req, res) => {
 	}
 };
 
-// Get real-time cities data for a state
 const getRealtimeCitiesByState = async (req, res) => {
 	try {
 		const { country, state } = req.params;
-		const { page = 1, limit = 20 } = req.query;
+		const { page = 1, limit = 20, search = "" } = req.query;
 
 		const pageNum = Number(page);
 		const limitNum = Number(limit);
 		const skip = (pageNum - 1) * limitNum;
 
-		// Get latest timestamp for each unique city using aggregation
 		const latestCitiesData = await City.aggregate([
 			{
 				$match: {
@@ -157,16 +159,23 @@ const getRealtimeCitiesByState = async (req, res) => {
 			throw new Error(`No cities found for state: ${state} in country: ${country}`);
 		}
 
-		const total = latestCitiesData.length;
-		
-		// Apply pagination
-		const cities = latestCitiesData.slice(skip, skip + limitNum);
+		let filteredCities = latestCitiesData;
 
-		// Format response with ranks
+		if (search && search.trim()) {
+			const searchTerm = search.trim().toLowerCase();
+			filteredCities = latestCitiesData.filter(city => 
+				city.city.toLowerCase().includes(searchTerm)
+			);
+		}
+
+		const total = filteredCities.length;
+		const paginatedCities = filteredCities.slice(skip, skip + limitNum);
+
 		const responseData = {
 			country: country,
 			state: state,
-			cities: cities.map((city, index) => ({
+			...(search ? { search: search } : {}),
+			cities: paginatedCities.map((city, index) => ({
 				rank: skip + index + 1,
 				city: city.city,
 				state: city.state,

@@ -17,7 +17,6 @@ const app = express();
 // ==================================================
 
 // 1. Trust proxy configuration for proper IP detection
-// This is crucial for rate limiting and CORS when behind reverse proxy/load balancer
 app.set('trust proxy', 1);
 
 // 2. Apply rate limiting to all requests (before other middleware)
@@ -33,20 +32,18 @@ app.use(express.json({
 app.use(express.urlencoded({ 
   limit: '10mb',
   extended: true,
-  parameterLimit: 1000 // Limit number of parameters
+  parameterLimit: 1000
 }));
 
 // 4. Enhanced CORS configuration with strict domain restriction
 const allowedOrigins = [
-  'https://beyond-main-d.vercel.app', // Your production frontend
-  'http://localhost:3000', // Local development
-  'http://localhost:3001', // Alternative local port
-  // Add more domains if needed in the future
+  'https://beyond-main-d.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001',
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) !== -1) {
@@ -56,9 +53,9 @@ app.use(cors({
       callback(new Error('Not allowed by CORS policy'));
     }
   },
-  credentials: true, // Allow cookies/credentials
-  optionsSuccessStatus: 200, // Support legacy browsers
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allowed HTTP methods
+  credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Origin',
     'X-Requested-With', 
@@ -66,29 +63,23 @@ app.use(cors({
     'Accept',
     'Authorization',
     'Cache-Control'
-  ], // Allowed headers
+  ],
   exposedHeaders: [
     'X-RateLimit-Limit',
     'X-RateLimit-Remaining',
     'X-RateLimit-Reset'
-  ] // Headers exposed to client
+  ]
 }));
 
 // 5. Additional security headers
 app.use((req, res, next) => {
-  // Prevent XSS attacks
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
-  
-  // Security policy headers
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-  
-  // Custom API headers
   res.setHeader('X-API-Version', '1.0');
   res.setHeader('X-Powered-By', 'BeyondAQI-API');
-  
   next();
 });
 
@@ -150,7 +141,6 @@ app.use("/api", hierarchyRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
-  // Log error details for debugging
   console.error('🚨 Error occurred:', {
     message: err.message,
     stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
@@ -172,7 +162,6 @@ app.use((err, req, res, next) => {
     });
   }
 
-  // Handle JSON parsing errors
   if (err.type === 'entity.parse.failed') {
     return res.status(400).json({
       status: 'error',
@@ -183,7 +172,6 @@ app.use((err, req, res, next) => {
     });
   }
 
-  // Handle payload too large errors
   if (err.type === 'entity.too.large') {
     return res.status(413).json({
       status: 'error',
@@ -194,7 +182,6 @@ app.use((err, req, res, next) => {
     });
   }
 
-  // Generic server error
   res.status(500).json({
     status: 'error',
     statusCode: 500,
