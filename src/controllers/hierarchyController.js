@@ -1,48 +1,29 @@
 const City = require("../models/CityAQI");
 const { CustomResponse, APIConstants } = require("../utils/apiconst");
 
-const getAqiStatusFromScale = (aqiScale) => {
-	switch (aqiScale) {
-		case 1: return "Good";
-		case 2: return "Moderate";
-		case 3: return "Unhealthy for Sensitive Groups";
-		case 4: return "Unhealthy";
-		case 5: return "Very Unhealthy";
-		case 6: return "Hazardous";
-		default: return "Unknown";
-	}
+const getAqiStatusFromScale = (scale) => {
+	if (scale <= 50) return "Good";
+	if (scale <= 100) return "Satisfactory";
+	if (scale <= 200) return "Moderate";
+	if (scale <= 300) return "Poor";
+	if (scale <= 400) return "Very Poor";
+	return "Severe";
 };
 
-const calculatePuffScore = (aqiValue, aqiScale) => {
-	if (aqiScale === 1) return Math.round(aqiValue * 0.02);
-	if (aqiScale === 2) return Math.round(aqiValue * 0.06);
-	if (aqiScale === 3) return Math.round(aqiValue * 0.08);
-	if (aqiScale === 4) return Math.round(aqiValue * 0.12);
-	if (aqiScale === 5) return Math.round(aqiValue * 0.15);
-	if (aqiScale === 6) return Math.round(aqiValue * 0.20);
-	return 0;
-};
-
-const findWithTimestamp = async (model, query, timestamp) => {
-	if (timestamp) {
-		const data = await model.findOne({
-			...query,
-			datetime: new Date(timestamp)
-		});
-		if (data) return data;
-	}
-	
-	return await model.findOne(query).sort({ datetime: -1 });
+const calculatePuffScore = (aqi, scale) => {
+	const baseScore = Math.min(Math.round((scale / 500) * 100), 100);
+	const adjustedScore = Math.min(baseScore + (aqi > 300 ? 20 : 0), 100);
+	return adjustedScore;
 };
 
 const getCountryData = async (req, res) => {
 	try {
 		const { country } = req.params;
-		const { timestamp } = req.query;
 
-		const matchQuery = { country: new RegExp(`^${country}$`, "i") };
-		const data = await findWithTimestamp(City, matchQuery, timestamp);
-		
+		const data = await City.findOne({
+			country: new RegExp(`^${country}$`, "i"),
+		}).sort({ datetime: -1 });
+
 		if (!data) throw new Error("No data found");
 
 		const responseData = {
@@ -84,14 +65,12 @@ const getCountryData = async (req, res) => {
 const getStateData = async (req, res) => {
 	try {
 		const { country, state } = req.params;
-		const { timestamp } = req.query;
 
-		const matchQuery = { 
-			country: new RegExp(`^${country}$`, "i"), 
-			state: new RegExp(`^${state}$`, "i") 
-		};
-		const data = await findWithTimestamp(City, matchQuery, timestamp);
-		
+		const data = await City.findOne({
+			country: new RegExp(`^${country}$`, "i"),
+			state: new RegExp(`^${state}$`, "i"),
+		}).sort({ datetime: -1 });
+
 		if (!data) throw new Error("No data found");
 
 		const responseData = {
@@ -134,15 +113,13 @@ const getStateData = async (req, res) => {
 const getCityData = async (req, res) => {
 	try {
 		const { country, state, city } = req.params;
-		const { timestamp } = req.query;
 
-		const matchQuery = { 
-			country: new RegExp(`^${country}$`, "i"), 
-			state: new RegExp(`^${state}$`, "i"), 
-			city: new RegExp(`^${city}$`, "i") 
-		};
-		const data = await findWithTimestamp(City, matchQuery, timestamp);
-		
+		const data = await City.findOne({
+			country: new RegExp(`^${country}$`, "i"),
+			state: new RegExp(`^${state}$`, "i"),
+			city: new RegExp(`^${city}$`, "i"),
+		}).sort({ datetime: -1 });
+
 		if (!data) throw new Error("No data found");
 
 		const responseData = {
@@ -188,23 +165,38 @@ const getCityData = async (req, res) => {
 const getCountryMetroCities = async (req, res) => {
 	try {
 		const { country } = req.params;
-		const latestRecord = await City.findOne({ 
-			country: new RegExp(`^${country}$`, "i") 
-		}).sort({ datetime: -1 });
-		
-		if (!latestRecord) throw new Error("No data found");
 
-		const latestTimestamp = latestRecord.datetime;
+		const pipeline = [
+			{
+				$match: {
+					country: new RegExp(`^${country}$`, "i"),
+					is_country_metro_city: true
+				}
+			},
+			{
+				$sort: { datetime: -1 }
+			},
+			{
+				$group: {
+					_id: "$city",
+					latestDoc: { $first: "$$ROOT" }
+				}
+			},
+			{
+				$replaceRoot: { newRoot: "$latestDoc" }
+			}
+		];
 
-		const metros = await City.find({
-			country: new RegExp(`^${country}$`, "i"),
-			is_country_metro_city: true,
-			datetime: latestTimestamp,
-		});
+		const metros = await City.aggregate(pipeline);
+
+		if (!metros || metros.length === 0) {
+			throw new Error("No metro cities found for this country");
+		}
 
 		const responseData = {
-			timestamp: latestTimestamp,
+			timestamp: new Date(),
 			country: country,
+			total_cities: metros.length,
 			cities: metros.map((c) => ({
 				city: c.city,
 				state: c.state,
@@ -245,26 +237,39 @@ const getStateMetroCities = async (req, res) => {
 	try {
 		const { country, state } = req.params;
 
-		const latestRecord = await City.findOne({ 
-			country: new RegExp(`^${country}$`, "i"), 
-			state: new RegExp(`^${state}$`, "i") 
-		}).sort({ datetime: -1 });
-		
-		if (!latestRecord) throw new Error("No data found");
+		const pipeline = [
+			{
+				$match: {
+					country: new RegExp(`^${country}$`, "i"),
+					state: new RegExp(`^${state}$`, "i"),
+					is_state_metro_city: true
+				}
+			},
+			{
+				$sort: { datetime: -1 }
+			},
+			{
+				$group: {
+					_id: "$city",
+					latestDoc: { $first: "$$ROOT" }
+				}
+			},
+			{
+				$replaceRoot: { newRoot: "$latestDoc" }
+			}
+		];
 
-		const latestTimestamp = latestRecord.datetime;
+		const metros = await City.aggregate(pipeline);
 
-		const metros = await City.find({
-			country: new RegExp(`^${country}$`, "i"),
-			state: new RegExp(`^${state}$`, "i"),
-			is_state_metro_city: true,
-			datetime: latestTimestamp,
-		});
+		if (!metros || metros.length === 0) {
+			throw new Error("No metro cities found for this state");
+		}
 
 		const responseData = {
-			timestamp: latestTimestamp,
+			timestamp: new Date(),
 			country: country,
 			state: state,
+			total_cities: metros.length,
 			cities: metros.map((c) => ({
 				city: c.city,
 				state: c.state,
