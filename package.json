@@ -4,10 +4,9 @@
   "description": "BeyondAQI Backend API Server",
   "main": "src/app.js",
   "scripts": {
-    "start": "NODE_ENV=production node src/app.js",
-    "dev": "NODE_ENV=development nodemon src/app.js",
-    "start:dev": "NODE_ENV=development node src/app.js",
-    "start:prod": "NODE_ENV=production node src/app.js",
+    "dev": "nodemon src/app.js",
+    "prod": "node src/app.js",
+    "start": "node src/app.js",
     "ingest:sample": "node scripts/ingest_sample.js",
     "ingest:google": "node src/scripts/ingestGoogleAQI.js",
     "test": "echo \"Error: no test specified\" && exit 1"

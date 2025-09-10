@@ -1,6 +1,12 @@
-require("dotenv").config({
-  path: process.env.NODE_ENV === 'development' ? '.env.local' : '.env'
-});
+const fs = require('fs');
+const path = require('path');
+
+if (fs.existsSync(path.join(__dirname, '..', '.env.local'))) {
+  require("dotenv").config({ path: '.env.local' });
+} else {
+  require("dotenv").config();
+}
+
 const express = require("express");
 const connectDB = require("./config/db");
 const hierarchyRoutes = require("./routes/hierarchyRoutes");
@@ -14,17 +20,9 @@ const rateLimiter = require("./middleware/rateLimiter");
 
 const app = express();
 
-// ==================================================
-// SECURITY CONFIGURATIONS
-// ==================================================
-
-// 1. Trust proxy configuration for proper IP detection
 app.set('trust proxy', 1);
-
-// 2. Apply rate limiting to all requests (before other middleware)
 app.use(rateLimiter);
 
-// 3. Request size limiting (10MB max) with additional security
 app.use(express.json({ 
   limit: '10mb',
   strict: true,
@@ -37,26 +35,12 @@ app.use(express.urlencoded({
   parameterLimit: 1000
 }));
 
-// 4. Enhanced CORS configuration with environment-based restrictions
 const corsConfig = () => {
   const isDevelopment = process.env.NODE_ENV === 'development';
   
   if (isDevelopment) {
-    // Development: Allow all localhost variants for testing
     return {
-      origin: function (origin, callback) {
-        if (!origin) return callback(null, true);
-        
-        const localhostRegex = /^http:\/\/localhost:\d+$/;
-        const localhostIpRegex = /^http:\/\/127\.0\.0\.1:\d+$/;
-        
-        if (localhostRegex.test(origin) || localhostIpRegex.test(origin)) {
-          callback(null, true);
-        } else {
-          console.warn(`🚫 DEV CORS blocked request from origin: ${origin}`);
-          callback(new Error('Not allowed by CORS policy'));
-        }
-      },
+      origin: true,
       credentials: true,
       optionsSuccessStatus: 200,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -75,7 +59,6 @@ const corsConfig = () => {
       ]
     };
   } else {
-    // Production: Strict domain whitelist
     const allowedOrigins = [
       'https://beyond-main-d.vercel.app'
     ];
@@ -113,7 +96,6 @@ const corsConfig = () => {
 
 app.use(cors(corsConfig()));
 
-// 5. Additional security headers
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -125,16 +107,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// ==================================================
-// DATABASE CONNECTION
-// ==================================================
 connectDB();
 
-// ==================================================
-// MONITORING & HEALTH ENDPOINTS
-// ==================================================
-
-// Health check endpoint (excluded from rate limiting in rateLimiter.js)
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
@@ -145,7 +119,6 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API status endpoint
 app.get('/api/status', (req, res) => {
   res.json({
     status: 'success',
@@ -167,9 +140,6 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// ==================================================
-// API ROUTES
-// ==================================================
 app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/dropdown", dropdownRoutes);
 app.use("/api/historical", historicalRoutes);
@@ -177,11 +147,6 @@ app.use("/api/search", searchRoutes);
 app.use("/api/realtime", realtimeRoutes);
 app.use("/api", hierarchyRoutes);
 
-// ==================================================
-// ERROR HANDLING
-// ==================================================
-
-// Global error handler
 app.use((err, req, res, next) => {
   console.error('🚨 Error occurred:', {
     message: err.message,
@@ -193,7 +158,6 @@ app.use((err, req, res, next) => {
     timestamp: new Date().toISOString()
   });
 
-  // Handle specific error types
   if (err.message === 'Not allowed by CORS policy') {
     return res.status(403).json({
       status: 'error',
@@ -233,7 +197,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler for undefined routes
 app.use((req, res) => {
   console.warn(`🔍 404 - Route not found: ${req.method} ${req.originalUrl} from IP: ${req.ip}`);
   
@@ -246,9 +209,6 @@ app.use((req, res) => {
   });
 });
 
-// ==================================================
-// SERVER STARTUP
-// ==================================================
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
   const isDevelopment = process.env.NODE_ENV === 'development';
@@ -259,14 +219,13 @@ const server = app.listen(PORT, () => {
   console.log(`📍 Server running on port ${PORT}`);
   console.log(`🛡️ Rate limiting: 10,000 requests per hour per IP`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔒 CORS mode: ${isDevelopment ? 'Development (localhost allowed)' : 'Production (strict whitelist)'}`);
+  console.log(`🔒 CORS mode: ${isDevelopment ? 'Development (NO RESTRICTIONS)' : 'Production (strict whitelist)'}`);
   console.log(`📊 Request size limit: 10MB`);
   console.log(`🔑 Proxy trust: Enabled`);
   console.log(`⏰ Started at: ${new Date().toISOString()}`);
   console.log('='.repeat(50));
 });
 
-// Graceful shutdown handling
 process.on('SIGTERM', () => {
   console.log('🛑 SIGTERM received. Shutting down gracefully...');
   server.close(() => {
