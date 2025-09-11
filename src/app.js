@@ -38,7 +38,11 @@ app.use(express.urlencoded({
 const corsConfig = () => {
   const isDevelopment = process.env.NODE_ENV === 'development';
   
-  if (isDevelopment) {
+  // TEMPORARY: Force development mode for testing
+  // Remove this line once testing is complete
+  const forceDevelopment = true;
+  
+  if (isDevelopment || forceDevelopment) {
     return {
       origin: true,
       credentials: true,
@@ -210,16 +214,16 @@ app.use((req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   const isDevelopment = process.env.NODE_ENV === 'development';
   
   console.log('='.repeat(50));
   console.log('🚀 BeyondAQI Backend Server Started');
   console.log('='.repeat(50));
-  console.log(`📍 Server running on port ${PORT}`);
+  console.log(`📍 Server running on 0.0.0.0:${PORT}`);
   console.log(`🛡️ Rate limiting: 10,000 requests per hour per IP`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔒 CORS mode: ${isDevelopment ? 'Development (NO RESTRICTIONS)' : 'Production (strict whitelist)'}`);
+  console.log(`🔒 CORS mode: OPEN (TEMPORARY TESTING)`);
   console.log(`📊 Request size limit: 10MB`);
   console.log(`🔑 Proxy trust: Enabled`);
   console.log(`⏰ Started at: ${new Date().toISOString()}`);
